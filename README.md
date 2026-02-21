@@ -1,26 +1,26 @@
 # Merlin Auction Bot
 
-Telegram бот для автоматического парсинга автомобилей с аукциона Merlin и отправки информации в Telegram чат с ценами из DoneDeal.
+Telegram bot for automatic parsing of cars from Merlin auction and sending information to a Telegram chat with prices from DoneDeal.
 
-## Требования
+## Requirements
 
-- Python 3.11 или выше
+- Python 3.11 or higher
 - Telegram Bot Token
 - Telegram Chat ID
 
-## Установка
+## Installation
 
-1. Клонируйте репозиторий или перейдите в директорию проекта:
+1. Clone the repository or navigate to the project directory:
 ```bash
 cd merlin_auction
 ```
 
-2. Создайте виртуальное окружение (рекомендуется):
+2. Create a virtual environment (recommended):
 ```bash
 python -m venv venv
 ```
 
-3. Активируйте виртуальное окружение:
+3. Activate the virtual environment:
 
 **Windows:**
 ```bash
@@ -32,80 +32,80 @@ venv\Scripts\activate
 source venv/bin/activate
 ```
 
-4. Установите зависимости:
+4. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-## Настройка
+## Configuration
 
-1. Откройте файл `bot.py` и настройте следующие параметры:
+1. Open `bot.py` and configure the following parameters:
 
 ```python
-API_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"  # Токен вашего Telegram бота
-auction_chat_id = YOUR_CHAT_ID        # ID чата для отправки сообщений
+API_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"  # Your Telegram bot token
+auction_chat_id = YOUR_CHAT_ID        # Chat ID for sending messages
 ```
 
-2. Получите Telegram Bot Token:
-   - Найдите [@BotFather](https://t.me/BotFather) в Telegram
-   - Отправьте команду `/newbot` и следуйте инструкциям
-   - Скопируйте полученный токен
+2. Get a Telegram Bot Token:
+   - Find [@BotFather](https://t.me/BotFather) on Telegram
+   - Send the `/newbot` command and follow the instructions
+   - Copy the received token
 
-3. Получите Chat ID:
-   - Найдите [@userinfobot](https://t.me/userinfobot) в Telegram
-   - Отправьте команду `/start`
-   - Скопируйте ваш Chat ID
+3. Get Chat ID:
+   - Find [@userinfobot](https://t.me/userinfobot) on Telegram
+   - Send the `/start` command
+   - Copy your Chat ID
 
-## Запуск
+## Running
 
-Запустите бота:
+Start the bot:
 
 ```bash
 python bot.py
 ```
 
-После запуска бот будет ожидать команду `/run` в Telegram. Отправьте эту команду боту, чтобы начать парсинг аукциона.
+After starting, the bot will wait for the `/run` command in Telegram. Send this command to the bot to start parsing the auction.
 
-## Использование
+## Usage
 
-1. Запустите бота (см. раздел "Запуск")
-2. В Telegram отправьте боту команду `/run`
-3. Бот начнет парсинг аукциона и будет отправлять информацию о машинах в указанный чат
+1. Start the bot (see "Running" section)
+2. In Telegram, send the `/run` command to the bot
+3. The bot will start parsing the auction and send car information to the specified chat
 
-## Функциональность
+## Features
 
-- **Асинхронный парсинг**: Быстрый сбор данных со всех страниц аукциона
-- **Детальная информация**: Автоматическое получение дополнительных данных со страниц машин
-- **Цены из DoneDeal**: Автоматический поиск средней цены на DoneDeal с fallback-логикой
-- **Мгновенная отправка**: Информация о каждой машине отправляется в Telegram сразу после получения цены
+- **Asynchronous parsing**: Fast data collection from all auction pages
+- **Detailed information**: Automatic retrieval of additional data from car pages
+- **DoneDeal prices**: Automatic search for average price on DoneDeal with fallback logic
+- **Instant delivery**: Information about each car is sent to Telegram immediately after receiving the price
 
-## Структура проекта
+## Project structure
 
 ```
 merlin_auction/
-├── bot.py              # Основной файл бота
-├── merlin.py           # Логика парсинга и обработки данных
-├── requirements.txt    # Зависимости проекта
-└── README.md          # Документация
+├── bot.py              # Main bot file
+├── merlin.py           # Parsing and data processing logic
+├── requirements.txt    # Project dependencies
+└── README.md          # Documentation
 ```
 
-## Зависимости
+## Dependencies
 
-- `pyTelegramBotAPI` - для работы с Telegram Bot API
-- `beautifulsoup4` - для парсинга HTML
-- `requests` - для синхронных HTTP запросов
-- `aiohttp` - для асинхронных HTTP запросов
+- `pyTelegramBotAPI` - for Telegram Bot API
+- `beautifulsoup4` - for HTML parsing
+- `requests` - for synchronous HTTP requests
+- `aiohttp` - for asynchronous HTTP requests
 
-## Примечания
+## Notes
 
-- Бот использует случайные User-Agent для имитации мобильных устройств
-- Между запросами добавлены задержки для избежания блокировок
-- При отсутствии цены на DoneDeal используются fallback-стратегии поиска
+- The bot uses random User-Agents to simulate mobile devices
+- Delays between requests are added to avoid blocking
+- Fallback search strategies are used when DoneDeal price is unavailable
 
-## Поддержка
+## Troubleshooting
 
-При возникновении проблем проверьте:
-- Правильность токена бота и Chat ID
-- Наличие интернет-соединения
-- Версию Python (должна быть 3.11 или выше)
-- Установлены ли все зависимости из requirements.txt
+If you encounter issues, check:
+- Bot token and Chat ID are correct
+- Internet connection is available
+- Python version is 3.11 or higher
+- All dependencies from requirements.txt are installed
