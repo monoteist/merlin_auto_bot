@@ -1422,10 +1422,9 @@ def get_donedeal_link(car_name, trans, fuel):
 
 def get_avg_from_url(url):
     """
-    Gets average price from DoneDeal by fetching the search page HTML
-    and parsing __NEXT_DATA__ (Next.js SSR).
-    Follows donedeal_bot logic: all pages, outlier removal, year±1 fallback.
-    URL format: https://www.donedeal.ie/cars/MAKE/MODEL/YEAR?transmission=MANUAL&fuelType=DIESEL
+    Gets average price from DoneDeal - only for cars with EXACT match of
+    transmission and fuel type. No fallbacks that relax these filters.
+    If no matching ads found, returns None (no average price sent).
     """
     try:
         from urllib.parse import urlparse, parse_qs, urlencode
@@ -1445,28 +1444,29 @@ def get_avg_from_url(url):
         transmission = query_params.get('transmission', [''])[0]
         fuel_type = query_params.get('fuelType', [''])[0]
         
+        # Must have transmission and fuel for meaningful comparison
+        if not transmission or not fuel_type:
+            print(f"  Skipping: transmission and fuel type required for price match")
+            return None, 0
+        
         print(f"Parsing URL: make={make}, model={model}, year={year}, transmission={transmission}, fuel={fuel_type}")
         
         base = f"https://www.donedeal.ie/cars/{make}/{model}"
         
-        def build_url(use_year=True, use_trans=True, use_fuel=True, year_from=None, year_to=None):
+        def build_url(use_year=True, year_from=None, year_to=None):
             path = base
             if use_year and year and not year_from:
                 path += f"/{year}"
-            params = {"price_from": "300"}
-            if use_trans and transmission:
-                params["transmission"] = transmission
-            if use_fuel and fuel_type:
-                params["fuelType"] = fuel_type
+            params = {"price_from": "300", "transmission": transmission, "fuelType": fuel_type}
             if year_from and year_to:
                 params["year_from"] = str(year_from)
                 params["year_to"] = str(year_to)
             return f"{path}?{urlencode(params)}"
         
-        # Try with all filters (exact match like donedeal_bot)
+        # Exact match: make, model, year, transmission, fuel
         prices = get_all_prices(build_url())
         
-        # If ≤1 result — expand year ±1 (like donedeal_bot)
+        # If ≤1 result — expand year ±1 (keeps transmission and fuel)
         if len(prices) <= 1 and year:
             try:
                 year_int = int(year)
@@ -1477,52 +1477,8 @@ def get_avg_from_url(url):
             except (ValueError, TypeError):
                 pass
         
-        # If still no results — try fallbacks
         if not prices:
-            # Without transmission
-            if transmission:
-                print(f"  [FALLBACK] Without transmission...")
-                prices = get_all_prices(build_url(use_trans=False))
-            
-            # Without fuel type
-            if not prices and fuel_type:
-                print(f"  [FALLBACK] Without fuel type...")
-                prices = get_all_prices(build_url(use_fuel=False))
-            
-            # Without any filters
-            if not prices and (transmission or fuel_type):
-                print(f"  [FALLBACK] Without filters (only make/model/year)...")
-                prices = get_all_prices(build_url(use_trans=False, use_fuel=False))
-            
-            # Expanded year ±2
-            if not prices and year:
-                try:
-                    year_int = int(year)
-                    print(f"  [FALLBACK] Year range {year_int-2}–{year_int+2}...")
-                    prices = get_all_prices(
-                        build_url(use_year=False, use_trans=False, use_fuel=False,
-                                  year_from=year_int-2, year_to=year_int+2)
-                    )
-                except (ValueError, TypeError):
-                    pass
-            
-            # Without year
-            if not prices and year:
-                print(f"  [FALLBACK] Without year...")
-                prices = get_all_prices(
-                    build_url(use_year=False, use_trans=False, use_fuel=False)
-                )
-            
-            # Model variant (remove hyphens)
-            if not prices and '-' in model:
-                model_variant = model.replace('-', ' ')
-                print(f"  [FALLBACK] Model variant '{model_variant}'...")
-                prices = get_all_prices(
-                    f"https://www.donedeal.ie/cars/{make}/{model_variant}?price_from=300"
-                )
-        
-        if not prices:
-            print(f"  ✗ Price not found even with fallback searches")
+            print(f"  No ads with matching transmission and fuel type")
             return None, 0
         
         # Remove outliers via IQR (like donedeal_bot)
