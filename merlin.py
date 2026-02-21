@@ -3,10 +3,12 @@ import time
 import random
 import asyncio
 import json
-import http.client
 from bs4 import BeautifulSoup
 import requests
 import aiohttp
+
+# Local proxy/VPN for DoneDeal requests (browser uses the same)
+DONEDEAL_PROXY = "http://127.0.0.1:12334"
 
 print("OK")
 
@@ -107,7 +109,7 @@ def get_car_link(url):
 
 async def get_cars_async(auction_url, user_id, bot):
     """
-    Асинхронно собирает все данные о машинах с merlin.ie, затем получает цены с donedeal
+    Collects car data from merlin.ie asynchronously, then gets prices from DoneDeal.
     """
     # Test message to verify bot is working
     try:
@@ -119,10 +121,10 @@ async def get_cars_async(auction_url, user_id, bot):
         import traceback
         traceback.print_exc()
     
-    # Получаем ID аукциона из URL
+    # Get auction ID from URL
     auction_id = auction_url.split('/')[-1] if '/' in auction_url else auction_url
     
-    # Создаем aiohttp сессию
+    # Create aiohttp session
     async with aiohttp.ClientSession() as session:
         # STEP 1: Collect all car cards from all pages (asynchronously)
         print("\n" + "="*60)
@@ -151,7 +153,7 @@ async def get_cars_async(auction_url, user_id, bot):
                 html = await response.text()
                 soup = BeautifulSoup(html, "html.parser")
                 
-                # Определяем максимальный номер страницы из пагинации
+                # Determine max page number from pagination
                 pagination = soup.find('ul', class_='pagination') or soup.find('nav', class_='pagination')
                 max_page = 1
                 
@@ -225,7 +227,7 @@ async def get_cars_async(auction_url, user_id, bot):
                                     else:
                                         continue  # Skip if no link
                                     
-                                    # Изображение
+                                    # Image
                                     img = card.find('img', class_='card-img-top')
                                     if img:
                                         img_src = img.get('src', '')
@@ -251,7 +253,7 @@ async def get_cars_async(auction_url, user_id, bot):
                                         # If no link found, don't set lot_number
                                     # If no card-lot element found, don't set lot_number
                                     
-                                    # Регистрационный номер
+                                    # Registration number
                                     reg_elem = card.find('div', class_='card-reg')
                                     if reg_elem:
                                         car_data['registration'] = reg_elem.get_text().strip()
@@ -264,7 +266,7 @@ async def get_cars_async(auction_url, user_id, bot):
                                     else:
                                         continue  # Skip if no make
                                     
-                                    # Model (модель) - первый <p> после card-title
+                                    # Model - first <p> after card-title
                                     card_title_wrap = card.find('div', class_='card-title-wrap')
                                     if card_title_wrap:
                                         paragraphs = card_title_wrap.find_all('p')
@@ -273,7 +275,7 @@ async def get_cars_async(auction_url, user_id, bot):
                                         if len(paragraphs) >= 2:
                                             car_data['variant'] = paragraphs[1].get_text().strip()
                                     
-                                    # Дата аукциона
+                                    # Auction date
                                     time_elem = card.find('li', class_='icon-item-time')
                                     if time_elem:
                                         date_text = time_elem.get_text().strip()
@@ -283,7 +285,7 @@ async def get_cars_async(auction_url, user_id, bot):
                                         else:
                                             car_data['date_auctions'] = date_text
                                     
-                                    # Детали из details-list
+                                    # Details from details-list
                                     details_list = card.find('ul', class_='details-list')
                                     if details_list:
                                         detail_items = details_list.find_all('li', class_='detail-item')
@@ -454,11 +456,11 @@ async def get_cars_async(auction_url, user_id, bot):
                         # But usually on auction page it's really TBC until confirmed
                         print(f"  ⚠ Lot Number remains TBC (To Be Confirmed) - may not be confirmed yet")
             
-            # Обновляем Autoguru
+            # Update Autoguru
             if details.get('autoguru'):
                 car_data['autoguru'] = details['autoguru']
             
-            # Обновляем cat_notes (очищенные)
+            # Update cat_notes (cleaned)
             if details.get('cat_notes'):
                 car_data['cat_notes'] = details['cat_notes']
             
@@ -943,7 +945,7 @@ def get_cars(url, user_id, bot):
     """Main function for getting and processing cars"""
     # Check if this is auction page URL or catalog
     if '/auction/' in url:
-        # Новый подход: парсим данные со страницы аукциона асинхронно
+        # New approach: parse data from auction page asynchronously
         print("Using new approach: asynchronous parsing from auction page")
         
         # Start asynchronous processing
@@ -1016,7 +1018,7 @@ def get_cars(url, user_id, bot):
         
         for link in links:
             data = {}
-            _wait_between_requests()  # Задержка между запросами
+            _wait_between_requests()  # Delay between requests
             
             try:
                 response = requests.get(link, headers=headers, timeout=30)
@@ -1037,8 +1039,8 @@ def get_cars(url, user_id, bot):
             lot_span = soup.find('span', class_='pill-item-lot')
             if lot_span:
                 lot_text = lot_span.get_text().strip()
-                # Убеждаемся, что получаем полный номер лота
-                if lot_text and len(lot_text) > 3:  # Минимум "Lot X"
+                # Ensure we get full lot number
+                if lot_text and len(lot_text) > 3:  # Minimum "Lot X"
                     data['lot_number'] = lot_text
                 else:
                     # Try to find in parent element
@@ -1221,7 +1223,7 @@ def send_car(i, user_id, bot):
             else:
                 caption += f"{car_name}\n\n"
             
-            # 3. Transmission, Fuel, Odometer в одной строке через запятую
+            # 3. Transmission, Fuel, Odometer
             transmission = i.get('transmission', 'Unknown')
             fuel = i.get('fuel', 'Unknown')
             odom = i.get('odom', 'Unknown')
@@ -1378,294 +1380,286 @@ def get_donedeal_link(car_name, trans, fuel):
     if len(parts) > 3:
         variant = ' '.join(parts[3:]).upper()
 
+    pf = "price_from=300"
+
     # Build the DoneDeal link based on make and model
     if 'LANDROVER' in make or make == 'LANDROVER':
         if model == 'RANGEROVER':
             if variant and any(v in variant for v in ['VELAR', 'SPORT', 'EVOQUE']):
                 variant_part = variant.split()[0] if variant.split() else ''
-                return f"{base}/Land%20Rover/Range%20Rover%20{variant_part}/{year}?transmission={trans}&fuelType={fuel}"
+                return f"{base}/Land%20Rover/Range%20Rover%20{variant_part}/{year}?transmission={trans}&fuelType={fuel}&{pf}"
             else:
-                return f"{base}/Land%20Rover/Range%20Rover/{year}?transmission={trans}&fuelType={fuel}"
+                return f"{base}/Land%20Rover/Range%20Rover/{year}?transmission={trans}&fuelType={fuel}&{pf}"
 
         elif model == 'DISCOVERY':
             if variant and 'SPORT' in variant:
-                return f"{base}/Land%20Rover/Discovery%20Sport/{year}?transmission={trans}&fuelType={fuel}"
+                return f"{base}/Land%20Rover/Discovery%20Sport/{year}?transmission={trans}&fuelType={fuel}&{pf}"
             else:
-                return f"{base}/Land%20Rover/Discovery/{year}?transmission={trans}&fuelType={fuel}"
+                return f"{base}/Land%20Rover/Discovery/{year}?transmission={trans}&fuelType={fuel}&{pf}"
 
         else:
-            return f"{base}/Land%20Rover/{model}/{year}?transmission={trans}&fuelType={fuel}"
+            return f"{base}/Land%20Rover/{model}/{year}?transmission={trans}&fuelType={fuel}&{pf}"
 
     elif make == 'CITROEN':
         if model == 'C4':
             if variant and 'GRAND PICASSO' in variant:
-                return f"{base}?make=Citroen;model:C4%20GRAND%20PICASSO,Grand%20C4%20Picasso&transmission={trans}&fuelType={fuel}&year_from={year}&year_to={year}"
+                return f"{base}?make=Citroen;model:C4%20GRAND%20PICASSO,Grand%20C4%20Picasso&transmission={trans}&fuelType={fuel}&year_from={year}&year_to={year}&{pf}"
 
             elif variant and any(v in variant for v in ['PICASSO', 'CACTUS']):
                 variant_part = variant.split()[0] if variant.split() else ''
-                return f"{base}/Citroen/{model}%20{variant_part}/{year}?transmission={trans}&fuelType={fuel}"
+                return f"{base}/Citroen/{model}%20{variant_part}/{year}?transmission={trans}&fuelType={fuel}&{pf}"
 
             else:
-                return f"{base}/Citroen/{model}/{year}?transmission={trans}&fuelType={fuel}"
+                return f"{base}/Citroen/{model}/{year}?transmission={trans}&fuelType={fuel}&{pf}"
         elif model == 'C3':
-            return f"{base}/Citroen/{model}/{year}?transmission={trans}&fuelType={fuel}"
+            return f"{base}/Citroen/{model}/{year}?transmission={trans}&fuelType={fuel}&{pf}"
     
     # Additional logic for other makes/models...
 
     else:
         # Use make_url for correct URL encoding
-        return f"{base}/{make_url}/{model}/{year}?transmission={trans}&fuelType={fuel}"
+        return f"{base}/{make_url}/{model}/{year}?transmission={trans}&fuelType={fuel}&{pf}"
 
 def get_avg_from_url(url):
     """
-    Extracts parameters from DoneDeal URL and gets average price via API
+    Gets average price from DoneDeal by fetching the search page HTML
+    and parsing __NEXT_DATA__ (Next.js SSR).
+    Follows donedeal_bot logic: all pages, outlier removal, year±1 fallback.
     URL format: https://www.donedeal.ie/cars/MAKE/MODEL/YEAR?transmission=MANUAL&fuelType=DIESEL
     """
     try:
-        # Parse URL to extract parameters
-        from urllib.parse import urlparse, parse_qs
+        from urllib.parse import urlparse, parse_qs, urlencode
         
         parsed = urlparse(url)
         path_parts = [p for p in parsed.path.split('/') if p]
         
-        # Format: /cars/MAKE/MODEL/YEAR
-        if len(path_parts) < 4 or path_parts[0] != 'cars':
+        if len(path_parts) < 3 or path_parts[0] != 'cars':
             print(f"Invalid URL format: {url}")
             return None, 0
         
-        make = path_parts[1]
-        model = path_parts[2]
-        year = path_parts[3]
+        make = path_parts[1] if len(path_parts) > 1 else ''
+        model = path_parts[2] if len(path_parts) > 2 else ''
+        year = path_parts[3] if len(path_parts) > 3 else ''
         
-        # Parse query parameters
         query_params = parse_qs(parsed.query)
-        transmission = query_params.get('transmission', [''])[0].upper()
-        fuel_type = query_params.get('fuelType', [''])[0].upper()
-        
-        # Normalize fuel type for API (remove complex combinations)
-        if '/' in fuel_type:
-            # If fuel type is "PETROL/PLUG-IN HYBRID ELECTRIC", take first part
-            fuel_type = fuel_type.split('/')[0].strip()
-        if 'HYBRID' in fuel_type or 'ELECTRIC' in fuel_type:
-            # For hybrids and electric use "Petrol" or "Diesel" depending on first part
-            if 'PETROL' in fuel_type or 'PETROL' in fuel_type.split('/')[0] if '/' in fuel_type else fuel_type:
-                fuel_type = 'Petrol'
-            elif 'DIESEL' in fuel_type or 'DIESEL' in fuel_type.split('/')[0] if '/' in fuel_type else fuel_type:
-                fuel_type = 'Diesel'
-            else:
-                fuel_type = 'Petrol'  # Default
+        transmission = query_params.get('transmission', [''])[0]
+        fuel_type = query_params.get('fuelType', [''])[0]
         
         print(f"Parsing URL: make={make}, model={model}, year={year}, transmission={transmission}, fuel={fuel_type}")
         
-        # Form parameters for API request
-        filters = []
-        if transmission:
-            filters.append({"name": "transmission", "values": [transmission]})
-        if fuel_type:
-            filters.append({"name": "fuelType", "values": [fuel_type]})
+        base = f"https://www.donedeal.ie/cars/{make}/{model}"
         
-        ranges = [
-            {"name": "price", "from": "300", "to": "100000"},
-            {"name": "year", "from": year, "to": year}
-        ]
+        def build_url(use_year=True, use_trans=True, use_fuel=True, year_from=None, year_to=None):
+            path = base
+            if use_year and year and not year_from:
+                path += f"/{year}"
+            params = {"price_from": "300"}
+            if use_trans and transmission:
+                params["transmission"] = transmission
+            if use_fuel and fuel_type:
+                params["fuelType"] = fuel_type
+            if year_from and year_to:
+                params["year_from"] = str(year_from)
+                params["year_to"] = str(year_to)
+            return f"{path}?{urlencode(params)}"
         
-        make_model = [{"model": model, "make": make}]
+        # Try with all filters (exact match like donedeal_bot)
+        prices = get_all_prices(build_url())
         
-        car_params = {
-            "sections": ["cars"],
-            "filters": filters,
-            "ranges": ranges,
-            "paging": {"pageSize": 40, "from": 0},
-            "sort": "",
-            "makeModelFilters": make_model,
-            "terms": "",
-        }
+        # If ≤1 result — expand year ±1 (like donedeal_bot)
+        if len(prices) <= 1 and year:
+            try:
+                year_int = int(year)
+                print(f"  [YEAR±1] Only {len(prices)} result, expanding to {year_int-1}–{year_int+1}...")
+                prices = get_all_prices(
+                    build_url(use_year=False, year_from=year_int-1, year_to=year_int+1)
+                )
+            except (ValueError, TypeError):
+                pass
         
-        # Try with all filters first
-        avg, count = get_avg_from_api(car_params)
-        if avg is not None:
-            return avg, count
+        # If still no results — try fallbacks
+        if not prices:
+            # Without transmission
+            if transmission:
+                print(f"  [FALLBACK] Without transmission...")
+                prices = get_all_prices(build_url(use_trans=False))
+            
+            # Without fuel type
+            if not prices and fuel_type:
+                print(f"  [FALLBACK] Without fuel type...")
+                prices = get_all_prices(build_url(use_fuel=False))
+            
+            # Without any filters
+            if not prices and (transmission or fuel_type):
+                print(f"  [FALLBACK] Without filters (only make/model/year)...")
+                prices = get_all_prices(build_url(use_trans=False, use_fuel=False))
+            
+            # Expanded year ±2
+            if not prices and year:
+                try:
+                    year_int = int(year)
+                    print(f"  [FALLBACK] Year range {year_int-2}–{year_int+2}...")
+                    prices = get_all_prices(
+                        build_url(use_year=False, use_trans=False, use_fuel=False,
+                                  year_from=year_int-2, year_to=year_int+2)
+                    )
+                except (ValueError, TypeError):
+                    pass
+            
+            # Without year
+            if not prices and year:
+                print(f"  [FALLBACK] Without year...")
+                prices = get_all_prices(
+                    build_url(use_year=False, use_trans=False, use_fuel=False)
+                )
+            
+            # Model variant (remove hyphens)
+            if not prices and '-' in model:
+                model_variant = model.replace('-', ' ')
+                print(f"  [FALLBACK] Model variant '{model_variant}'...")
+                prices = get_all_prices(
+                    f"https://www.donedeal.ie/cars/{make}/{model_variant}?price_from=300"
+                )
         
-        # Fallback 1: Try without transmission filter
-        print(f"  [FALLBACK] Trying without transmission filter...")
-        filters_no_trans = [f for f in filters if f["name"] != "transmission"]
-        if len(filters_no_trans) < len(filters):
-            car_params_fallback = car_params.copy()
-            car_params_fallback["filters"] = filters_no_trans
-            avg, count = get_avg_from_api(car_params_fallback)
-            if avg is not None:
-                print(f"  ✓ Price found without transmission filter")
-                return avg, count
+        if not prices:
+            print(f"  ✗ Price not found even with fallback searches")
+            return None, 0
         
-        # Fallback 2: Try without fuel type filter
-        print(f"  [FALLBACK] Trying without fuel type filter...")
-        filters_no_fuel = [f for f in filters if f["name"] != "fuelType"]
-        if len(filters_no_fuel) < len(filters):
-            car_params_fallback = car_params.copy()
-            car_params_fallback["filters"] = filters_no_fuel
-            avg, count = get_avg_from_api(car_params_fallback)
-            if avg is not None:
-                print(f"  ✓ Price found without fuel type filter")
-                return avg, count
+        # Remove outliers via IQR (like donedeal_bot)
+        clean_prices = remove_price_outliers(prices)
         
-        # Fallback 3: Try without any filters (only make, model, year)
-        print(f"  [FALLBACK] Trying without any filters (only make/model/year)...")
-        car_params_fallback = car_params.copy()
-        car_params_fallback["filters"] = []
-        avg, count = get_avg_from_api(car_params_fallback)
-        if avg is not None:
-            print(f"  ✓ Price found without filters")
-            return avg, count
+        if clean_prices:
+            avg = int(sum(clean_prices) / len(clean_prices))
+            print(f"  ✓ Average: €{avg} ({len(clean_prices)} ads, {len(prices) - len(clean_prices)} outliers removed)")
+            return avg, len(clean_prices)
         
-        # Fallback 4: Try with expanded year range (±2 years)
-        try:
-            year_int = int(year)
-            print(f"  [FALLBACK] Trying with expanded year range ({year_int-2} to {year_int+2})...")
-            car_params_fallback = car_params.copy()
-            car_params_fallback["filters"] = []
-            car_params_fallback["ranges"] = [
-                {"name": "price", "from": "300", "to": "100000"},
-                {"name": "year", "from": str(year_int-2), "to": str(year_int+2)}
-            ]
-            avg, count = get_avg_from_api(car_params_fallback)
-            if avg is not None:
-                print(f"  ✓ Price found with expanded year range")
-                return avg, count
-        except (ValueError, TypeError):
-            pass
-        
-        # Fallback 5: Try without year (only make and model)
-        print(f"  [FALLBACK] Trying without year (only make/model)...")
-        car_params_fallback = car_params.copy()
-        car_params_fallback["filters"] = []
-        car_params_fallback["ranges"] = [
-            {"name": "price", "from": "300", "to": "100000"}
-        ]
-        avg, count = get_avg_from_api(car_params_fallback)
-        if avg is not None:
-            print(f"  ✓ Price found without year")
-            return avg, count
-        
-        # Fallback 6: Try with model name variations (remove hyphens)
-        if '-' in model:
-            model_variant = model.replace('-', ' ')
-            print(f"  [FALLBACK] Trying with model variant '{model_variant}' (without hyphen)...")
-            car_params_fallback = car_params.copy()
-            car_params_fallback["filters"] = []
-            car_params_fallback["ranges"] = [
-                {"name": "price", "from": "300", "to": "100000"}
-            ]
-            car_params_fallback["makeModelFilters"] = [{"model": model_variant, "make": make}]
-            avg, count = get_avg_from_api(car_params_fallback)
-            if avg is not None:
-                print(f"  ✓ Price found with model variant")
-                return avg, count
-        
-        print(f"  ✗ Price not found even with fallback searches")
+        print(f"  ✗ All {len(prices)} prices removed as outliers")
         return None, 0
         
     except Exception as e:
         print(f"Error parsing URL {url}: {e}")
-        return None, 0
-
-def get_avg_from_api(car_params: dict):
-    """
-    Gets average price via DoneDeal API (as in donedeal_bot)
-    """
-    try:
-        # Add delay between requests
-        _wait_between_requests()
-        
-        uri = "/ddapi/v1/search"
-        host = "www.donedeal.ie"
-        payload_json = json.dumps(car_params)
-        
-        user_agent = get_random_user_agent()
-        headers = {
-            "Accept": "application/json",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Brand": "donedeal",
-            "Content-Type": "application/json",
-            "User-Agent": user_agent,
-            "Origin": "https://www.donedeal.ie",
-            "Referer": "https://www.donedeal.ie/cars",
-        }
-        
-        conn = http.client.HTTPSConnection(host, timeout=30)
-        try:
-            print(f"Sending API request to {host}{uri}")
-            conn.request("POST", uri, body=payload_json, headers=headers)
-            response = conn.getresponse()
-            data = response.read()
-            data_decoded = data.decode("utf-8")
-            
-            if response.status == 200:
-                result = json.loads(data_decoded)
-                
-                # Check different possible response structures
-                ads = None
-                if "ads" in result:
-                    ads = result.get("ads", [])
-                elif "data" in result and isinstance(result["data"], dict):
-                    # Possibly data in data.ads
-                    ads = result["data"].get("ads", [])
-                elif "data" in result and isinstance(result["data"], list):
-                    # Possibly data is a list of ads
-                    ads = result["data"]
-                
-                if not ads or (isinstance(ads, list) and len(ads) == 0):
-                    print("  [DEBUG] No ads found in API response")
-                    print(f"  [DEBUG] Keys in response: {list(result.keys())}")
-                    if "paging" in result:
-                        paging_info = result['paging']
-                        print(f"  [DEBUG] paging: {paging_info}")
-                        if paging_info.get('totalResults', 0) == 0:
-                            print(f"  [INFO] No listings found for this search criteria")
-                    return None, 0
-                
-                if not isinstance(ads, list):
-                    print(f"  [DEBUG] ads is not a list, type: {type(ads)}")
-                    return None, 0
-                print(f"Found ads: {len(ads)}")
-                
-                prices = []
-                for ad in ads:
-                    if ad.get("currency") == "EUR":
-                        try:
-                            price_str = ad.get("price", "").replace(",", "")
-                            if price_str:
-                                price_value = int(price_str)
-                                if price_value > 0:
-                                    prices.append(price_value)
-                        except (ValueError, KeyError):
-                            continue
-                
-                if prices:
-                    average_price = sum(prices) / len(prices)
-                    print(f"  ✓ Average price: €{int(average_price)} ({len(prices)} ads)")
-                    return average_price, len(prices)
-                else:
-                    print(f"  ✗ No valid prices found in {len(ads)} ads (all prices may be in different currency or invalid)")
-                    return None, 0
-                    
-            elif response.status == 403:
-                print("Error 403: Possible Cloudflare blocking")
-                return None, 0
-            else:
-                print(f"API error: status {response.status}")
-                return None, 0
-                
-        finally:
-            conn.close()
-            
-    except Exception as e:
-        print(f"Error getting prices via API: {e}")
         import traceback
         traceback.print_exc()
         return None, 0
 
+
+def remove_price_outliers(prices):
+    """
+    Removes outlier prices using IQR method (same as donedeal_bot).
+    Returns cleaned price list.
+    """
+    if not prices or len(prices) < 2:
+        return prices
+    
+    try:
+        sorted_prices = sorted(prices)
+        n = len(sorted_prices)
+        
+        q1_idx = n // 4
+        q3_idx = (3 * n) // 4
+        q1 = sorted_prices[q1_idx]
+        q3 = sorted_prices[q3_idx]
+        iqr = q3 - q1
+        
+        lower = q1 - 1.5 * iqr
+        upper = q3 + 1.5 * iqr
+        
+        cleaned = [p for p in sorted_prices if lower <= p <= upper]
+        return cleaned if len(cleaned) >= 2 else prices
+    except Exception:
+        return prices
+
+
+def fetch_donedeal_page(url):
+    """
+    Fetches a DoneDeal search page and extracts __NEXT_DATA__ JSON.
+    Returns (ads_list, paging_dict) or (None, None) on failure.
+    """
+    _wait_between_requests()
+    
+    user_agent = get_random_user_agent()
+    req_headers = {
+        "User-Agent": user_agent,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    
+    proxies = {"http": DONEDEAL_PROXY, "https": DONEDEAL_PROXY}
+    
+    print(f"  GET {url}")
+    
+    try:
+        resp = requests.get(url, headers=req_headers, proxies=proxies, timeout=30)
+    except Exception as e:
+        print(f"  Proxy error: {str(e)[:100]}")
+        try:
+            resp = requests.get(url, headers=req_headers, timeout=30)
+        except Exception as e2:
+            print(f"  Direct request also failed: {str(e2)[:80]}")
+            return None, None
+    
+    if resp.status_code != 200:
+        print(f"  Error {resp.status_code}")
+        return None, None
+    
+    soup = BeautifulSoup(resp.text, "html.parser")
+    script_tag = soup.find("script", id="__NEXT_DATA__")
+    
+    if not script_tag or not script_tag.string:
+        print("  __NEXT_DATA__ not found in HTML")
+        return None, None
+    
+    try:
+        data = json.loads(script_tag.string)
+        page_props = data.get("props", {}).get("pageProps", {})
+        ads = page_props.get("ads", [])
+        paging = page_props.get("paging", {})
+        return ads, paging
+    except (json.JSONDecodeError, KeyError) as e:
+        print(f"  Error parsing __NEXT_DATA__: {e}")
+        return None, None
+
+
+def get_all_prices(url):
+    """
+    Fetches ALL pages of DoneDeal results and collects all prices.
+    Paginates like donedeal_bot (up to 10 pages).
+    Returns sorted list of prices.
+    """
+    MAX_PAGES = 10
+    all_prices = []
+    separator = "&" if "?" in url else "?"
+    
+    for page_num in range(MAX_PAGES):
+        page_url = url if page_num == 0 else f"{url}{separator}from={page_num * 30}"
+        
+        ads, paging = fetch_donedeal_page(page_url)
+        
+        if ads is None:
+            break
+        
+        total_results = paging.get("totalResults", 0) if paging else 0
+        
+        for ad in ads:
+            price_info = ad.get("priceInfo", {})
+            if price_info.get("priceOnRequest"):
+                continue
+            price_euro = price_info.get("priceInEuro")
+            if price_euro and isinstance(price_euro, (int, float)) and price_euro > 0:
+                all_prices.append(int(price_euro))
+        
+        if not ads or total_results <= (page_num + 1) * 30:
+            break
+        
+        time.sleep(random.uniform(0.5, 1.5))
+    
+    if all_prices:
+        print(f"  Collected {len(all_prices)} prices across {page_num + 1} page(s)")
+    
+    return sorted(all_prices)
+
 def get_avg(url):
-    """Gets average price from DoneDeal via API (as in donedeal_bot)"""
+    """Gets average price from DoneDeal via HTML parsing (__NEXT_DATA__)"""
     return get_avg_from_url(url)
 
 # Add your main execution logic here if needed.
