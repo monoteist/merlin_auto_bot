@@ -1,4 +1,5 @@
 import re
+import sys
 import time
 import random
 import asyncio
@@ -8,9 +9,12 @@ import requests
 import aiohttp
 from playwright.async_api import async_playwright
 
-# На Windows Python 3.11+ по умолчанию ProactorEventLoop — несовместим с aiohttp
-if hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+def _make_event_loop():
+    """Создаёт event loop: ProactorEventLoop на Windows, обычный на macOS/Linux."""
+    if sys.platform == 'win32':
+        return asyncio.ProactorEventLoop()
+    return asyncio.new_event_loop()
 
 # Local proxy/VPN for DoneDeal requests (browser uses the same)
 DONEDEAL_PROXY = ""
@@ -783,7 +787,7 @@ def get_cars(url, user_id, bot):
             result_queue = queue.Queue()
             
             def run_in_thread():
-                new_loop = asyncio.ProactorEventLoop()
+                new_loop = _make_event_loop()
                 asyncio.set_event_loop(new_loop)
                 try:
                     print("[THREAD] Starting asynchronous processing...")
@@ -813,8 +817,7 @@ def get_cars(url, user_id, bot):
             except queue.Empty:
                 print("Warning: result from thread not received (thread may still be running)")
         except RuntimeError:
-            # Event loop not running — create ProactorEventLoop (required for Playwright on Windows)
-            loop = asyncio.ProactorEventLoop()
+            loop = _make_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(get_cars_async(url, user_id, bot))
     else:
@@ -822,7 +825,7 @@ def get_cars(url, user_id, bot):
         print("Using old approach: through separate pages")
 
         def _run_old():
-            new_loop = asyncio.ProactorEventLoop()
+            new_loop = _make_event_loop()
             asyncio.set_event_loop(new_loop)
             try:
                 new_loop.run_until_complete(_get_cars_old_async(url, user_id, bot))
@@ -978,9 +981,9 @@ def send_car(i, user_id, bot):
             img_url = '/images/comingsoon.jpg'
         
         if img_url.startswith('/images/comingsoon.jpg'):
-            response = requests.get(f"https://www.merlin.ie{img_url}", timeout=10)
+            response = requests.get(f"https://www.merlin.ie{img_url}", timeout=30)
         else:
-            response = requests.get(img_url, timeout=10)
+            response = requests.get(img_url, timeout=30)
         
         print(f"[send_car] Image loading status: {response.status_code}")
         
